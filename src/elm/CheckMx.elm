@@ -16,7 +16,6 @@ import Phoenix.Socket
 import Phoenix.Channel
 import Phoenix.Push
 
-
 type alias Model =
     { current_check_email : String
     , socket : Phoenix.Socket.Socket Msg
@@ -36,14 +35,14 @@ type alias MailCheck =
 -- Browser Bound
 
 
-port check_email_response : MailCheck -> Cmd msg
+port checkEmailResponse : MailCheck -> Cmd msg
 
 
 
 -- Elm-Bound
 
 
-port check_email : (String -> msg) -> Sub msg
+port checkEmail : (String -> msg) -> Sub msg
 
 
 
@@ -73,7 +72,8 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [
-         Phoenix.Socket.listen model.socket PhoenixMsg
+         checkEmail CheckEmail
+         , Phoenix.Socket.listen model.socket PhoenixMsg
         ]
 
 
@@ -82,48 +82,84 @@ socketServer =
     -- http://web.production-elixir-service.36cf5ace.svc.dockerapp.io:8080/socket/websocket
     "ws://localhost:4000/socket/websocket"
 
+joinChannel : (Phoenix.Socket.Socket Msg) -> ( Phoenix.Socket.Socket Msg , Cmd (Phoenix.Socket.Msg Msg) )
+joinChannel aSocket =
+    let
+        channel = Phoenix.Channel.init "dns"
+    in
+        Phoenix.Socket.join channel aSocket
+ 
 initSocket : Phoenix.Socket.Socket Msg
 initSocket =
     Phoenix.Socket.init socketServer
-        |> Phoenix.Socket.withDebug
-        |> Phoenix.Socket.on "check-mx" "dns" ReceiveMailCheck
-initModel : Model
-initModel =
-     { current_check_email = ""
-      , socket = initSocket
-      , mailCheck = Nothing
-      }
+    |> Phoenix.Socket.withDebug
+    |> Phoenix.Socket.on "check-mx" "dns" ReceiveMailCheck
 
 
-init : ( Model, Cmd msg )
+init : ( Model, Cmd Msg )
 init =
-    ( initModel
-    , Cmd.none
-    )
+    let
+        (socket, cmd) = joinChannel initSocket
+    in
+      let
+          initModel = { current_check_email = ""
+                      , socket = socket
+                      , mailCheck = Nothing
+                      }
+
+      in
+      ( initModel
+      , Cmd.map PhoenixMsg cmd
+      )
+
+
+updateCheckEmail: Model -> String -> (Model, Cmd Msg)
+updateCheckEmail model email =
+    let
+        payload =
+            (Json.Encode.object [ ( "email", Json.Encode.string email ) ])
+
+        push_ =
+            Phoenix.Push.init "check-mx" "dns"
+                |> Phoenix.Push.withPayload payload
+        ( phxSocket, phxCmd ) =
+            Phoenix.Socket.push push_ model.socket
+    in
+        ( { model
+            | current_check_email = (log "email" email)
+            , socket = phxSocket
+          }
+        , Cmd.map PhoenixMsg phxCmd
+        )
+
+updatePhoenixMsg: Model -> (Phoenix.Socket.Msg Msg) -> (Model , Cmd Msg)
+updatePhoenixMsg model msg =
+    let
+      ( phxSocket, phxCmd ) = Phoenix.Socket.update (log "msg" msg) model.socket
+    in
+      ( { model | socket = phxSocket }
+      , Cmd.map PhoenixMsg phxCmd
+      )
+
+
+updateRecieveMailCheck: Model -> Json.Decode.Value -> (Model , Cmd Msg)
+updateRecieveMailCheck model raw =
+    case Json.Decode.decodeValue decodeMailCheck (log "raw " raw) of
+        Ok mailCheck ->
+            ( { model| mailCheck = Just (log "mailCheck" mailCheck) }, Cmd.none)
+        Err error ->
+            (model, Cmd.none)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         PhoenixMsg msg ->
-          let
-            ( phxSocket, phxCmd ) = Phoenix.Socket.update msg model.socket
-          in
-            ( { model | socket = phxSocket }
-            , Cmd.map PhoenixMsg phxCmd
-            )
+            updatePhoenixMsg model msg
         CheckEmail email ->
-            log email
-                ( { model | current_check_email = email }
-                , Cmd.none
-                )
+            updateCheckEmail model email
         ReceiveMailCheck raw ->
-            case Json.Decode.decodeValue decodeMailCheck raw of
-                Ok mailCheck ->
-                    ( { model| mailCheck = Just (log "mailCheck" mailCheck) }, Cmd.none)
-                Err error ->
-                    (model, Cmd.none)
-
+            updateRecieveMailCheck model raw
 
 
 main : Program Never Model Msg
