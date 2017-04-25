@@ -2,7 +2,7 @@
   "name": "elm-check-mx",
   "version": "1.0.0",
   "description": "Our package to interface with Check-Mx Service",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },

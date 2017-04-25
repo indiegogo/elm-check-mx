@@ -19,12 +19,12 @@ module.exports = {
     }]
   },
   plugins: [
-/*    new webpack.optimize.UglifyJsPlugin({
+    new webpack.optimize.UglifyJsPlugin({
       sourceMap: true,
       minimize:   true,
       compressor: { warnings: false }, // against my better judgment this is false because "compressing" elm emits a slew of warnings
-  //    mangle:  true
+      mangle:  true
     } 
-) */
+                                       ) 
   ]
 };

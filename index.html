@@ -20,7 +20,30 @@
 </head>
 
 <body>
-    <script type="text/javascript" src="dist/index.js"></script>
+  <script type="text/javascript" src="dist/index.js"></script>
+  <script type="text/javascript">
+   var checker = new CheckMx()
+   checker.setCallback() // use default
+   checker.checkEmail("curtis@ram9.cc")
+   setTimeout(function() {
+     checker.setCallback(
+       function(ob) {
+         console.log("my custom callback")
+         console.log("custom ==> email used for checking : "+ ob.email);
+         console.log("custom ==> hostname mx checked : "+ ob.hostname);
+         console.log("custom ==> hostname mx valid? : "+ ob.validMx);
+         console.log("custom ==> has possible replacement host suggestion : "+ ob.hasSuggestion);
+         console.log("custom ==> possible replacement host suggestion : "+ ob.suggestion);
+         console.log("my custom callback")
+       })
+
+     checker.checkEmail("curtis@gmail.pom")
+     checker.checkEmail("curtis@yahoo.pom")
+     checker.checkEmail("curtis@yahoa.com")
+     checker.checkEmail("curtis@gnail.com")
+   },3000)
+   console.log("wating 3 seconds to change callback and run checks again")
+  </script>
 </body>
 
 </html>

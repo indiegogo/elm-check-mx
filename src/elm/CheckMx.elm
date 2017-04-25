@@ -8,7 +8,7 @@ port module CheckMx exposing (..)
 import Json.Decode
 import Json.Encode
 
-import Debug exposing (log)
+import Debug as D
 import Json.Decode exposing (field)
 
 import Maybe
@@ -17,15 +17,18 @@ import Phoenix.Channel
 import Phoenix.Push
 
 type alias Model =
-    { current_check_email : String
+    { currentCheckEmail : String
     , socket : Phoenix.Socket.Socket Msg
     , mailCheck : Maybe MailCheck
+    , error : Maybe String
     }
 
 
 type alias MailCheck =
-    { validMx : Bool
-    , suggestion : String
+    {
+      validMx : Bool
+    , email : String
+    , suggestion : Maybe String
     , hostname : String
     , hasSuggestion : Bool
     }
@@ -33,7 +36,7 @@ type alias MailCheck =
 
 
 -- Browser Bound
-
+-- https://hackernoon.com/how-elm-ports-work-with-a-picture-just-one-25144ba43cdd
 
 port checkEmailResponse : MailCheck -> Cmd msg
 
@@ -55,15 +58,21 @@ type Msg
     | ReceiveMailCheck Json.Encode.Value
 
 
+log: String -> b -> b
+log token value =
+    -- turn on logging with the below
+    -- D.log token value
+    value -- turn off logging
 
 -- generated with http://eeue56.github.io/json-to-elm/
 
 
 decodeMailCheck : Json.Decode.Decoder MailCheck
 decodeMailCheck =
-    Json.Decode.map4 MailCheck
+    Json.Decode.map5 MailCheck
         (field "validMx" Json.Decode.bool)
-        (field "suggestion" Json.Decode.string)
+        (field "email" Json.Decode.string)
+        (field "suggestion" (Json.Decode.maybe Json.Decode.string))
         (field "hostname" Json.Decode.string)
         (field "hasSuggestion" Json.Decode.bool)
 
@@ -92,7 +101,7 @@ joinChannel aSocket =
 initSocket : Phoenix.Socket.Socket Msg
 initSocket =
     Phoenix.Socket.init socketServer
-    |> Phoenix.Socket.withDebug
+    -- |> Phoenix.Socket.withDebug
     |> Phoenix.Socket.on "check-mx" "dns" ReceiveMailCheck
 
 
@@ -102,9 +111,10 @@ init =
         (socket, cmd) = joinChannel initSocket
     in
       let
-          initModel = { current_check_email = ""
+          initModel = { currentCheckEmail = ""
                       , socket = socket
                       , mailCheck = Nothing
+                      , error = Nothing
                       }
 
       in
@@ -126,7 +136,7 @@ updateCheckEmail model email =
             Phoenix.Socket.push push_ model.socket
     in
         ( { model
-            | current_check_email = (log "email" email)
+            | currentCheckEmail = (log "email" email)
             , socket = phxSocket
           }
         , Cmd.map PhoenixMsg phxCmd
@@ -144,11 +154,11 @@ updatePhoenixMsg model msg =
 
 updateRecieveMailCheck: Model -> Json.Decode.Value -> (Model , Cmd Msg)
 updateRecieveMailCheck model raw =
-    case Json.Decode.decodeValue decodeMailCheck (log "raw " raw) of
+    case Json.Decode.decodeValue decodeMailCheck raw of
         Ok mailCheck ->
-            ( { model| mailCheck = Just (log "mailCheck" mailCheck) }, Cmd.none)
+            ( { model | mailCheck = Just (log "mailCheck" mailCheck) }, checkEmailResponse mailCheck )
         Err error ->
-            (model, Cmd.none)
+            ( { model | error = Just (log "error" error) }, Cmd.none)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
